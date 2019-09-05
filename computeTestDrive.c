@@ -31,14 +31,14 @@ long int compute(long int C, long int w[], long int v[], int n, int len, int loc
     }
 
     while (!done) {
-        done = 1; // 用来标识计算是否结束
+        done = 1;
         for (i = len; i < n; i++)
         {
-            if (!used[i]) {       // 如果第i个物品没有被使用，那么使用第i个物品
-                used[i] = 1;      // 将used数组中的值标识为1
-                cur_weight += w[i];   // 加上第i个物品的重量
-                cur_value += v[i];    // 加上第i个物品的价值
-                done = 0;          // 将done赋值为0，这样就会继续while循环
+            if (!used[i]) {
+                used[i] = 1;
+                cur_weight += w[i];
+                cur_value += v[i];
+                done = 0;
                 break;
             } else {
                 used[i] = 0;
@@ -73,7 +73,7 @@ int main()
     }
 
 
-    result = compute(C, w, v, n, 3, 3);
+    result = compute(C, w, v, n, 0, 0);
 
     printf("The reuslt is: %ld\n", result);
 
