@@ -200,7 +200,7 @@ long int master(long int C, long int w[], long int v[], int n)
 
     print_arr(buf, 2*n + 1);
 
-    MPI_Bcast(&buf[0], 2*n + 1, MPI_LONG_INT, 0, MPI_COMM_WORLD);  // broadcast C, w and v
+    MPI_Bcast(&buf[0], 2*n + 1, MPI_LONG, 0, MPI_COMM_WORLD);  // broadcast C, w and v
 
 
     printf("Prefix size: %d\n", prefix_bit);
@@ -214,7 +214,7 @@ long int master(long int C, long int w[], long int v[], int n)
     }
     for (i = 1; i < size; i++)
     {
-        MPI_Irecv(&msg_recv[0], 1, MPI_LONG_INT, i, 2, MPI_COMM_WORLD, &rq[i]);
+        MPI_Irecv(&msg_recv[0], 1, MPI_LONG, i, 2, MPI_COMM_WORLD, &rq[i]);
     }
     while (!finished)
     {
@@ -241,7 +241,7 @@ long int master(long int C, long int w[], long int v[], int n)
                     msg_snd[0] = prefix_bit;
                     msg_snd[1] = prefix_val;
                     MPI_Isend(&msg_snd[0], 2, MPI_INT, i, 1, MPI_COMM_WORLD, &re[0]);
-                    MPI_Irecv(&msg_recv[0], 1, MPI_LONG_INT, i, 2, MPI_COMM_WORLD, &rq[i]);
+                    MPI_Irecv(&msg_recv[0], 1, MPI_LONG, i, 2, MPI_COMM_WORLD, &rq[i]);
                 }
             }
         }
@@ -284,7 +284,7 @@ long int slave()
     long int buf[2*n + 1];
     long int w[n], v[n];
     long int C = 0;
-    MPI_Bcast(&buf[0], 2*n+1, MPI_LONG_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&buf[0], 2*n+1, MPI_LONG, 0, MPI_COMM_WORLD);
     C = buf[0];
     for (i = 0; i < n; i++)
     {
@@ -313,7 +313,7 @@ long int slave()
         long int res = compute(C, w, v, n, msg_recv[0], msg_recv[1]);
 
         msg_snd[0] = res;
-        MPI_Isend(&msg_snd[0], 1, MPI_LONG_INT, 0, 2, MPI_COMM_WORLD, &re[0]);
+        MPI_Isend(&msg_snd[0], 1, MPI_LONG, 0, 2, MPI_COMM_WORLD, &re[0]);
         MPI_Wait(&re[0], &s);
         /*
         while (!s.MPI_ERROR)
