@@ -5,12 +5,16 @@
 \usepackage{graphicx}
 \usepackage{upgreek}
 \usepackage{enumitem}
+\usepackage{caption}
+\usepackage{titlesec}
 
 \setlength{\parindent}{0pt}
 \geometry{a4paper,left=2.5cm,right=2.5cm,top=2.54cm,bottom=2.54cm}
 \setmainfont{Times New Roman}
-\setlength{\parskip}{0.5em}
+\setlength{\parskip}{6pt}
 \renewcommand{\baselinestretch}{1.0}
+\captionsetup{font={scriptsize}}  % 调整表格标题字体大小
+\titlespacing{\subsection}{0pt}{12pt}{6pt}
 
 \title{COMP90025 Assignment 1B}
 \author{Yunlu Wen (yunluw)\ ID: 869338\\ Renjie Zhong (renjie)\ ID: 961201}
@@ -18,14 +22,84 @@
 \begin{document}
     \maketitle
 
-    \section{One}
-    xxxxxxxx
-    \subsection{One point one}
-    xxxxxxxx
+    \section{Base Algorithm}
+    Brute-force solution was chosen as base algorithm for simplicity. What is does is simply trying all the possible combinations of whether using the item or not, so the complexity is $O(2^n)$ where n is the number of items available.
 
-    \section{two}
-    xxxxxxxx
-    \subsection{Two point one}
-    xxxxxxxx
+    \section{Parallelization}
+    In order to parallel the algorithm with MPI, we divided the ``used" vector which records the usage of items in to two parts. The most significant K bits are used as counter, which works like a unique id of a job that is distributed to workers. Job ids are scattered from rank0 process to all processes. The rest of the vector is a sub problem for the workers to work out. For example, the following vector has a counter of value 3. When a worker receives a job with counter 3, it first calculating the weight of items already in the knapsack, in this case, is the weight of second item. If the weight is less than the capacity C, then it goes through the brute force algorithm on rest part which maximize the value of items. Otherwise, it simply returns -1 or current value as a result. With this method, the rank0 process only need to broadcast the weight and value vector and job counters to other processes.
+
+    \begin{table}[h]
+        \centering
+        \begin{tabular}{|c|c|c|c|c|c|c|c|}
+            \hline
+            0 & 1 & 0 & x & x & x & x & x\\
+            \hline
+        \end{tabular}
+    \end{table}
+
+    The K was chosen to be: 
+    $$min(\frac{len(used)}{2}, \log_2(size*2))$$
+    where $size$ is number of processes launched in MPI.
+
+    \section{Termination}
+    Suppose we have $K$ bits for job counter, then when $K^2$th job is finished, the algorithm should stop. The job distribution is done by scattering, if the first job $ID$ in scatter list is already larger or equal to $K^2$, then the $rank0$ sets all job $ID$s to -2, and all the other processes will quit the loop when they see -2. If only the last few $ID$s are greater than $K^2$, those $ID$s will be set to -1. If receiving processes see -1, it will simply return -1 without any calculation. For example, the situation of $K=3$ is shown in following tables:
+
+    \begin{table}[h]
+        \centering
+        \caption{Unfinished Jobs}
+        \begin{tabular}{|c|c|c|c|}
+            \hline
+            0 & 1 & 2 & 3\\
+            \hline
+        \end{tabular}
+    \end{table}
+
+    Table 2 shows the situation of ``partially finished". $ID$s with values that greater than threshold will be replaced by -1, which causes returning -1 directly by worker.
+
+    \begin{table}[h]
+        \centering
+        \caption{Partially Finished}
+        \begin{tabular}{|c|c|c|c|}
+            \hline
+            5 & 6 & 7 & -1\\
+            \hline
+        \end{tabular}
+    \end{table}
+
+    Table 3 displays the situation of ``all finished". In this situation, ``-2"s will be scattered to workers as a signal of breaking the event loop.
+
+    \begin{table}[h]
+        \centering
+        \caption{All Finished}
+        \small
+        \begin{tabular}{|c|c|c|c|}
+            \hline
+            -2 & -2 & -2 & -2\\
+            \hline
+        \end{tabular}
+    \end{table}
+
+    \section{Results and Analysis}
+
+    We tested 1 node, 2 nodes, 4 nodes, and 8 nodes, respectively, and each case was tested with a different number of items. What's more, in order to ensure the accuracy of the data, we tested each case three times and took their average as the final result.
+
+    \begin{table}[h]
+        \centering
+        \scalebox{0.8}{
+            \begin{tabular}{|c|c|c|c|c|c|}
+                \hline
+                num of items & 1 node & 2 nodes & 4 nodes & 8 nodes \\
+                \hline
+                20 items & 0.008s & 0.005s & 0.003s & 0.006s \\
+                \hline
+                25 itmes & 0.324s & 0.134s & 0.126s & 0.041s \\
+                \hline
+                30 items & 7.6s   & 4.3s   & 2.5s   & 1.2s   \\
+                \hline
+                35 itmes & 246s   & 143s   & 77s    & 37s    \\
+                \hline
+            \end{tabular}
+        }
+    \end{table}
 
 \end{document}

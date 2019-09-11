@@ -6,7 +6,6 @@
 #include <stdint.h>
 #include <mpi.h>
 #include <math.h>
-#include <omp.h>
 #include <unistd.h>
 
 long int knapSack(long int C, long int w[], long int v[], int n);
@@ -58,13 +57,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-/* PLACE YOUR CHANGES BELOW HERE */
-#include <strings.h>
 
-long int max(long int x, long int y)
-{
-    return (x > y) ? x : y;
-}
 
 /* (No longer from the URL given in line 2) */
 
@@ -72,17 +65,20 @@ long int max(long int x, long int y)
     Sequential version which calculate the weight with preset
 */
 
-void print_arr(long int arr[], int n) {
+
+/* PLACE YOUR CHANGES BELOW HERE */
+#include <strings.h>
+void print_arr(long int arr[], int n)
+{
     printf("=====================================\n");
-    for(int i=0;i<n;i++) {
+    for (int i = 0; i < n; i++)
+    {
         printf("%ld ", arr[i]);
     }
 
     printf("\n");
-            printf("=====================================\n");
-
+    printf("=====================================\n");
 }
-
 
 void dec2bin(int *bin_arr, int dec, int n_bits)
 {
@@ -119,14 +115,12 @@ long int compute(long int C, long int w[], long int v[], int n, int len, int loc
     for (i = 0; i < len; i++)
     {
         cur_value += used[i] * v[i];
-        printf("used: %d, w: %ld\n", used[i], w[i]);
         cur_weight += used[i] * w[i];
     }
 
     if (cur_weight > C)
     {
-        printf("cur_weight: %ld\n",cur_weight);
-        return -1;
+        return 0;
     }
 
     while (!done)
@@ -156,12 +150,11 @@ long int compute(long int C, long int w[], long int v[], int n, int len, int loc
             bcopy(used, solution, sizeof(used));
         }
     }
+    
     return max_value;
 }
 
-
-
-long int master(long int C, long int w[], long int v[], int n)
+void master(long int C, long int w[], long int v[], int n, long int * max)
 {
 
     /*
@@ -169,201 +162,121 @@ long int master(long int C, long int w[], long int v[], int n)
             [prefix_bits, task_prefix]
             
     */
-    printf("Starting master........\n");
+
+    const int SIG_TERM = -2;
+    const int SIG_END = -1;
+
+    //printf("Starting master........\n");
     int rank;
     int size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
-    MPI_Request rq[100], re[100];
     MPI_Status s;
-    int recvd[100];
-    const int prefix_bit = min(log2(size) + 1, n / 2);
-    int msg_snd[2];
-    long int msg_recv[1];
-
     int prefix_val = 0;
-    long int max = 0;
     int finished = 0;
 
-    int i; //循环体
+    int loc=0; // Buffer for broadcast
+    int loc_buf[size];
+    long int tmp_res;
 
-    long int buf[2*n + 1]; // Buffer for broadcast
-    buf[0] = n;
-    MPI_Bcast(&buf[0], 1, MPI_INT, 0, MPI_COMM_WORLD);  // broadcast n
+    const int prefix_bit = min(log2(size) + 1, n / 2);
 
-    buf[0] = C;
-    for (i = 0; i < n; i++)
-    {
-        buf[i + 1] = w[i];
-        buf[i + n + 1] = v[i];
-    }
-
-    print_arr(buf, 2*n + 1);
-
-    MPI_Bcast(&buf[0], 2*n + 1, MPI_LONG, 0, MPI_COMM_WORLD);  // broadcast C, w and v
-
-
-    printf("Prefix size: %d\n", prefix_bit);
-    for (int i = 0; i < size; i++)
-    {
-        msg_snd[0] = prefix_bit;
-        msg_snd[1] = prefix_val;
-        MPI_Isend(&msg_snd[0], 2, MPI_INT, i, 1, MPI_COMM_WORLD, &re[0]);
-        MPI_Wait(&re[0], &s);
-        printf("Error: %d\n", s.MPI_ERROR);
-    }
-    for (i = 1; i < size; i++)
-    {
-        MPI_Irecv(&msg_recv[0], 1, MPI_LONG, i, 2, MPI_COMM_WORLD, &rq[i]);
-    }
     while (!finished)
     {
-        for (i = 1; i < size; i++)
+        if (prefix_val >= pow(2, prefix_bit))
         {
-            int err = MPI_Test(&rq[i], &recvd[i], MPI_STATUS_IGNORE);
-            if (recvd[i])
+            for (int i = 0; i < size; i++)
             {
-                printf("Reveived result from slave %d : %ld\n", i, msg_recv[0]);
-
-                recvd[i] = 0;
-                if (msg_recv[0] > max)
+                loc_buf[i] = SIG_TERM;
+            }
+        }
+        else
+        {
+            for (int i = 0; i < size; i++)
+            {
+                if (prefix_val < pow(2, prefix_bit))
                 {
-                    max = msg_recv[0];
-                }
-                prefix_val++;
-                int thres = pow(2, prefix_bit);
-                if (prefix_val >= thres)
-                {
-                    finished = 1;
+                    loc_buf[i]  = prefix_val;
+                    prefix_val++;
                 }
                 else
                 {
-                    msg_snd[0] = prefix_bit;
-                    msg_snd[1] = prefix_val;
-                    MPI_Isend(&msg_snd[0], 2, MPI_INT, i, 1, MPI_COMM_WORLD, &re[0]);
-                    MPI_Irecv(&msg_recv[0], 1, MPI_LONG, i, 2, MPI_COMM_WORLD, &rq[i]);
+                    loc_buf[i]  = SIG_END;
+                    prefix_val++;
                 }
             }
         }
-    }
 
-    for (int i = 1; i < size; i++)
-    {
-        msg_snd[0] = -1;
-        msg_snd[1] = -1;
-        MPI_Isend(&msg_snd[0], 2, MPI_INT, i, 1, MPI_COMM_WORLD, &re[i + size]);
-        printf("Sent TERM sig to slave: %d\n", i);
-    }
-    printf("Result: %ld\n", max);
-    return max;
-}
+        MPI_Scatter(&loc_buf[0], 1, MPI_INT,&loc,1,MPI_INT, 0, MPI_COMM_WORLD);
+        long int res;
 
-long int slave()
-{
-
-    int rank;
-    int size;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-    printf("Starting slave %d.........\n", rank);
-
-    long int msg_snd[1];
-    int msg_recv[2];
-    MPI_Request rq[1], re[1];
-    MPI_Status s;
-    int recved = 0;
-    int finished = 0;
-    int n = 0;
-
-    /*接收Bcast*/
-    int i;
-    int x[1];
-    MPI_Bcast(&x[0], 1, MPI_INT, 0, MPI_COMM_WORLD);
-    // printf("%d\n", x[0]);
-    n = x[0];
-    long int buf[2*n + 1];
-    long int w[n], v[n];
-    long int C = 0;
-    MPI_Bcast(&buf[0], 2*n+1, MPI_LONG, 0, MPI_COMM_WORLD);
-    C = buf[0];
-    for (i = 0; i < n; i++)
-    {
-        w[i] = buf[i + 1];
-        v[i] = buf[i + n + 1];
-    }
-    print_arr(buf, 2*n + 1);
-
-    while (!finished)
-    {
-        MPI_Irecv(&msg_recv[0], 2, MPI_INT, 0, 1, MPI_COMM_WORLD, &rq[0]);
-
-        MPI_Wait(&rq[0], &s);
-        printf("\rSlavePolling %d\n", s.MPI_ERROR);
-
-        recved = 0;
-        if (msg_recv[0] < 0)
+        if (loc == SIG_END)
         {
-            printf("Slave %d terminated\n", rank);
-            break;
+            res = -1;
+        }
+        else if (loc == SIG_TERM)
+        {
+            //printf("TERM %d\n", rank);
+            res = -1;
+            finished = 1;
+        }
+        else
+        {
+            res = compute(C, w, v, n, prefix_bit, loc);
         }
 
-        printf("Received data from master: %d, %d\n", msg_recv[0], msg_recv[1]);
-
-
-        long int res = compute(C, w, v, n, msg_recv[0], msg_recv[1]);
-
-        msg_snd[0] = res;
-        MPI_Isend(&msg_snd[0], 1, MPI_LONG, 0, 2, MPI_COMM_WORLD, &re[0]);
-        MPI_Wait(&re[0], &s);
-        /*
-        while (!s.MPI_ERROR)
+        MPI_Reduce(&res, &tmp_res, 1, MPI_LONG, MPI_MAX, 0, MPI_COMM_WORLD);
+        if (rank == 0)
         {
-            printf("R...");
-            MPI_Isend(&msg_snd[0], 1, MPI_LONG_INT, 0, 2, MPI_COMM_WORLD, &re[0]);
+            if (tmp_res > *max)
+            {
+                *max = tmp_res;
+            }
         }
-        */
+
+        //printf("Iterations: %d", prefix_val);
     }
-    return 0;
+    //printf("Rank %d Finished\n", rank);
 }
 
-int C_;
-long int *w_;
-long int *v_;
-int n_;
-
-long int knapSack(long int C, long int w[], long int v[], int n)
+long int knapSack(long int C, long int w[], long int v[], int N)
 {
     int i;
-    unsigned char used[n], solution[n];
+    unsigned char used[N], solution[N];
     int done = 0;
     int rank;
     int size;
+    long int max_value = 0;
+    //int N = n;
+    int n = N;
+    long int c = C;
 
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
-    printf("%d\n", rank);
 
+    MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&c, 1, MPI_LONG, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&w[0], N, MPI_LONG, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&v[0], N, MPI_LONG, 0, MPI_COMM_WORLD);
+    N = n;
+    C = c;
     if (size == 1)
     {
-        return compute(C, w, v, n, 0, 0);
-    }
-
-    if (rank == 0)
-    {
-        //slave(C, w, v, n);
-        master(C, w, v, n);
+        return compute(C, w, v, N, 0, 0);
     }
     else
     {
-        slave();
+        master(C, w, v, N, &max_value);
+        //return compute(C, w, v, n, 0, 0);
     }
+
+    
 
     int bin[3];
 
     dec2bin(&bin[0], 3, 3);
 
     bzero(used, sizeof(used));
-    long int max_value = 0;
 
     return max_value;
 }
