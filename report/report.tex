@@ -13,7 +13,7 @@
 \setmainfont{Times New Roman}
 \setlength{\parskip}{6pt}
 \renewcommand{\baselinestretch}{1.0}
-\captionsetup{font={scriptsize}}  % 调整表格标题字体大小
+\captionsetup{font={footnotesize}}  % 调整表格标题字体大小
 \titlespacing{\subsection}{0pt}{12pt}{6pt}
 
 \title{COMP90025 Assignment 1B}
@@ -23,10 +23,10 @@
     \maketitle
 
     \section{Base Algorithm}
-    Brute-force solution was chosen as base algorithm for simplicity. What is does is simply trying all the possible combinations of whether using the item or not, so the complexity is $O(2^n)$ where n is the number of items available.
+    Brute-force solution was chosen as base algorithm for simplicity. What it does is simply trying all the possible combinations of whether using the item or not, so the complexity is $O(2^n)$ where n is the number of items available.
 
     \section{Parallelization}
-    In order to parallel the algorithm with MPI, we divided the ``used" vector which records the usage of items in to two parts. The most significant K bits are used as counter, which works like a unique id of a job that is distributed to workers. Job ids are scattered from rank0 process to all processes. The rest of the vector is a sub problem for the workers to work out. For example, the following vector has a counter of value 3. When a worker receives a job with counter 3, it first calculating the weight of items already in the knapsack, in this case, is the weight of second item. If the weight is less than the capacity C, then it goes through the brute force algorithm on rest part which maximize the value of items. Otherwise, it simply returns -1 or current value as a result. With this method, the rank0 process only need to broadcast the weight and value vector and job counters to other processes.
+    In order to parallelize the algorithm with MPI, we divided the ``used" vector which records the usage of items in to two parts. The most significant K bits are used as counter, which works like a unique id of a job that is distributed to workers. Job ids are scattered from rank0 process to all processes. The rest of the vector is a sub problem for the workers to work out. For example, the following vector has a counter of value 3. When a worker receives a job with counter 3, it first calculating the weight of items already in the knapsack, in this case, is the weight of second item. If the weight is less than the capacity C, then it goes through the brute force algorithm on rest part which maximize the value of items. Otherwise, it simply returns -1 or current value as a result. With this method, the rank0 process only need to broadcast the weight and value vector and job counters to other processes.
 
     \begin{table}[h]
         \centering
@@ -42,7 +42,7 @@
     where $size$ is number of processes launched in MPI.
 
     \section{Termination}
-    Suppose we have $K$ bits for job counter, then when $K^2$th job is finished, the algorithm should stop. The job distribution is done by scattering, if the first job $ID$ in scatter list is already larger or equal to $K^2$, then the $rank0$ sets all job $ID$s to -2, and all the other processes will quit the loop when they see -2. If only the last few $ID$s are greater than $K^2$, those $ID$s will be set to -1. If receiving processes see -1, it will simply return -1 without any calculation. For example, the situation of $K=3$ is shown in following tables:
+    Suppose we have $K$ bits for job counter, then when $2^K$th job is finished, the algorithm should stop. The job distribution is done by scattering, if the first job $ID$ in scatter list is already larger or equal to $2^K$, then the $rank0$ sets all job $ID$s to -2, and all the other processes will quit the loop when they see -2. If only the last few $ID$s are greater than $2^K$, those $ID$s will be set to -1. If receiving processes see -1, it will simply return -1 without any calculation. For example, the situation of $K=3$ is shown in following tables:
 
     \begin{table}[h]
         \centering
@@ -81,10 +81,11 @@
 
     \section{Results and Analysis}
 
-    We tested 1 node, 2 nodes, 4 nodes, and 8 nodes, respectively, and each case was tested with a different number of items. What's more, in order to ensure the accuracy of the data, we tested each case three times and took their average as the final result.
+    We tested 1 node, 2 nodes, 4 nodes, and 8 nodes, respectively, and each case was tested with a different number of items. What's more, in order to ensure the accuracy of the data, we tested each case three times and took their average as the final result. The results of the test are displayed in the table below, which use second as the unit.
 
     \begin{table}[h]
         \centering
+        \caption{average processing time (s)}
         \scalebox{0.8}{
             \begin{tabular}{|c|c|c|c|c|c|}
                 \hline
@@ -101,5 +102,18 @@
             \end{tabular}
         }
     \end{table}
+
+    Since we used brute-force method as our base algorithm, in theory every time 5 items are added, the processing time will be increased by 32 times ($2^5$). Moreover, the number of nodes will be inversely proportional to the processing time. And we can see from the actual test data, the results are basically consistent with our predicted results. Only when the number of items is 20, there is a large deviation from our estimate. We speculate that it is because the amount of data processed is too small, and the advantage of using MPI multi-process parallelism has not been realized. It is more clear to display the data in the form of a line chart.
+
+    \begin{figure}[htb]
+        \centering
+        \includegraphics[scale=0.5]{line_chart.png}
+        \caption{average processign time (s)}
+    \end{figure}
+
+    The relationship between the number of items and the processing time, and the relationship between the number of nodes and the processing time can be clearly seen from Figure 1. In the case of a small number of items, the advantage of using MPI parallelism is not obvious. But as the number of items increases, the advantages of using MPI parallelism are fully reflected. As can be seen from Figure 1, when the number of items is increased to 35, the processing time is significantly inversely related to the number of nodes used.
+
+    \section{Conclusion}
+    This report first introduced the algorithm ideas used by our team, and then showed the test data and detailed analysis. After the critical analysis, we came to a conclusion that in the case of small amount of data, MPI has no effect on the processing speed of the algorithm. But when the amount of data increases to a certain extent, the processing speed of the algorithm is proportional to the number of nodes in parallel. The more nodes we use, the faster the processing speed is.
 
 \end{document}
